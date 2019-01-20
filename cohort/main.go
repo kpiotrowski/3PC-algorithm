@@ -172,6 +172,7 @@ loop:
 			}
 		//If timeout - commit
 		case <-timeout:
+			log.Warn("Cohort prepared timeout")
 			break loop
 		}
 	}
