@@ -11,5 +11,5 @@ var (
 	SleepTime = time.Second * 2
 
 	CoordinatorWaitTime = time.Second * 20
-	CohorWaitTime       = time.Second * 40
+	CohortWaitTime      = time.Second * 40
 )

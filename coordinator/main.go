@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/kpiotrowski/3PC-algorithm/config"
@@ -18,10 +17,10 @@ func main() {
 	flag.Parse()
 	log.SetLevel(logLevel)
 
-	if len(os.Args) < 3 {
+	if len(flag.Args()) < 2 {
 		panic("Not enough arguments to run. You should execute coordinator with [coordinator_addr:port] [cohort_addr_1:port] [cohort_addr_1:port] [cohort_addr_1:port] ...")
 	}
-	c, err := newCoordinator(os.Args[1], os.Args[2:]...)
+	c, err := newCoordinator(flag.Args()[0], flag.Args()[1:]...)
 	if err != nil {
 		panic(err)
 	}
@@ -82,7 +81,6 @@ func (c *coordinator) Run() {
 			return
 		}
 	}
-	// TODO
 }
 
 func (c *coordinator) Close() {
@@ -109,11 +107,11 @@ func (c *coordinator) handleInitState() {
 func (c *coordinator) handleWaitingState() {
 	responses := map[string]bool{}
 	timeout := make(chan bool)
-
 	go func() {
 		time.Sleep(config.CoordinatorWaitTime)
 		timeout <- true
 	}()
+
 	for {
 		select {
 		case resp := <-c.msgChannel:
@@ -143,11 +141,11 @@ func (c *coordinator) handleWaitingState() {
 func (c *coordinator) handlePreparedState() {
 	responses := map[string]bool{}
 	timeout := make(chan bool)
-
 	go func() {
 		time.Sleep(config.CoordinatorWaitTime)
 		timeout <- true
 	}()
+
 	for {
 		select {
 		case resp := <-c.msgChannel:

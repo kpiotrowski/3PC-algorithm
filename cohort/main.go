@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/kpiotrowski/3PC-algorithm/config"
@@ -15,25 +14,22 @@ import (
 const logLevel = log.InfoLevel
 
 var (
-	canCommit        = flag.Bool("cc", true, "Can commit response. Default is True. Set to false to simulate commit abort.")
-	canCommitTimeout = flag.Bool("cct", false, "Can commit timeout. Default false. Set to true if you want to simulate commit abort.")
-	ack              = flag.Bool("ack", true, "If true cohort sends ACK. Default is true. Set to false to simulate commit abort.")
+	canCommit = flag.Bool("c", true, "Can commit response. Default is True. Set to false to simulate commit abort.")
 )
 
 func main() {
 	flag.Parse()
 	log.SetLevel(logLevel)
 
-	if len(os.Args) < 3 {
-		panic("Not enough arguments to run. You should execute cohort with [cohort_addr:port] [coordinator_addr:port]")
+	if len(flag.Args()) < 2 {
+		panic("Not enough arguments to run. You should execute cohort with (flags) [cohort_addr:port] [coordinator_addr:port]")
 	}
-	c, err := newCohort(os.Args[1], os.Args[2])
+	c, err := newCohort(flag.Args()[0], flag.Args()[1])
 	if err != nil {
 		panic(err)
 	}
 
 	c.Run()
-
 }
 
 type cohort struct {
@@ -111,6 +107,8 @@ func (c *cohort) handleInitState() {
 				err = state.SendCommitYes(c.coordinatorSocket, c.cohortAddr, c.coordinatorAddr)
 			} else {
 				err = state.SendCommitNo(c.coordinatorSocket, c.cohortAddr, c.coordinatorAddr)
+				c.abort()
+				return
 			}
 			//IF there was an eror - abort
 			if err != nil {
@@ -124,9 +122,58 @@ func (c *cohort) handleInitState() {
 }
 
 func (c *cohort) handleWaitingState() {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(config.CohortWaitTime)
+		timeout <- true
+	}()
 
+loop:
+	for {
+		select {
+		case resp := <-c.msgChannel:
+			//If received ABORT - abort
+			if resp.IsAbort() {
+				c.abort()
+				return
+			} else if resp.IsPreCommit() {
+				//If received PRE commit - send ACK
+				state.SendAck(c.coordinatorSocket, c.cohortAddr, c.coordinatorAddr)
+				break loop
+			}
+		//If timeout - abort
+		case <-timeout:
+			log.Error("Cohort wait TIMEOUT")
+			c.abort()
+			return
+		}
+	}
+	c.state = state.Prepared
 }
 
 func (c *cohort) handlePreparedState() {
+	timeout := make(chan bool)
+	go func() {
+		time.Sleep(config.CohortWaitTime)
+		timeout <- true
+	}()
 
+loop:
+	for {
+		select {
+		case resp := <-c.msgChannel:
+			//If received ABORT - abort
+			if resp.IsAbort() {
+				c.abort()
+				return
+			} else if resp.IsDoCommit() {
+				//If received DO COMMIT - commit trnsaction
+				break loop
+			}
+		//If timeout - commit
+		case <-timeout:
+			break loop
+		}
+	}
+	c.state = state.Commited
 }

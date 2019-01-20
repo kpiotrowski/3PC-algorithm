@@ -99,6 +99,7 @@ func Listen(deliverChannel chan Message, address string) {
 		if err != nil {
 			log.Error("Failed to decode message", err)
 		} else {
+			log.Info(fmt.Sprintf("%s received %s from %s", address, message.Action, message.Sender))
 			deliverChannel <- message
 		}
 	}
